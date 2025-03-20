@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Words To Vibes</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+    <!-- TensorFlow.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+</head>
+<body>
+    <h1>Words To Vibes</h1>
+    <p>Upload an image to find songs related to it.</p>
+
+    <div class="upload-container">
+        <label for="imageUpload">📷 Click to Upload an Image</label>
+        <input type="file" id="imageUpload" accept="image/*">
+    </div>
+
+    <div class="results-container"></div>
+    <button id="findMoreSongs" style="display: none;" onclick="findMoreSongs()">Beta Version</button>
+
+    <script src="script.js"></script>
+</body>
+</html>
