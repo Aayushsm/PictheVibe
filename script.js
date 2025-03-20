@@ -66,7 +66,7 @@ async function logVisitor(action = "Page Visit") {
         action: action,
     };
 
-    fetch("https://script.google.com/macros/s/AKfycbzVtP2EJqPLGLWpYT2fIXBZbBXyMojdaHajOQEih5VoCeGKRiffjglMMPxZxxPtm8Zp/exec", { // Replace with your Web App URL
+    fetch("https://script.google.com/macros/s/1pGi4a0TwARbyxb3KSwPsvkuBPegwxbu0Z1TLOOw4vYA/exec", { // Replace with your Web App URL
         method: "POST",
         body: JSON.stringify(visitorDetails),
         headers: { "Content-Type": "application/json" },
@@ -203,20 +203,39 @@ function displaySongs(songs) {
     const resultsContainer = document.querySelector(".results-container");
     resultsContainer.innerHTML = ""; // Clear previous songs
 
+    // Define messages for specific songs
+    const songMessages = {
+        "paro": "Are you listening to Paro on loop?",
+        "china seeds": "Chia seeds, earthy smell, miss them",
+        // Add more song-message pairs if needed
+    };
+
     songs.forEach(song => {
         const songCard = document.createElement("div");
         songCard.classList.add("song-card");
+
+        // Normalize song name (convert to lowercase and trim spaces)
+        const normalizedSongName = song.name.toLowerCase().trim();
+
+        // Check if the song exists in our messages
+        const message = songMessages[normalizedSongName] 
+            ? `<p class="song-message">${songMessages[normalizedSongName]}</p>` 
+            : ""; // If no message, show nothing
+
         songCard.innerHTML = `
             <img src="${song.album.images[0]?.url}" alt="${song.name}">
             <h3>${song.name}</h3>
             <p>By ${song.artists[0].name}</p>
+            ${message} <!-- Insert custom message here -->
             <iframe src="https://open.spotify.com/embed/track/${song.id}" 
                 width="100%" height="80" frameborder="0" allowtransparency="true" allow="encrypted-media">
             </iframe>
         `;
+
         resultsContainer.appendChild(songCard);
     });
 
     // Show "Find More Songs" button below the last song
     document.getElementById("findMoreSongs").style.display = "block";
+    console.log("Checking Song Name:", song.name);
 }

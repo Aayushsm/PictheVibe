@@ -151,3 +151,16 @@ label:hover {
     background: url('gif1.gif') no-repeat center center fixed;
     transform: scale(1.05);
 }
+
+.hidden-message {
+    font-size: 12px; /* Make it small */
+    color: #cccccc; /* Light grey to blend in */
+    opacity: 0.5; /* Faint so it's not noticeable */
+    text-align: center;
+    margin-bottom: 0px;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.hidden-message:hover {
+    opacity: 1; /* Only becomes fully visible if hovered over */
+}
