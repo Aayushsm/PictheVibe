@@ -1,30 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Words To Vibes</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
-    <!-- TensorFlow.js Library -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
-</head>
-<body>
-    <h1>Words To Vibes</h1>
-    <p>Upload an image to find songs related to it.</p>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Pic the Vibe</title>
+        <link rel="stylesheet" href="style.css">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Quicksand:wght@700&family=Satisfy&display=swap" rel="stylesheet">
+        <!-- TensorFlow.js -->
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+        <!-- COCO-SSD -->
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+        <!-- face-api.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js"></script>
+        <!-- ColorThief -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
+        <!-- MediaPipe Tasks Vision as a module -->
+        <script type="module">
+            import * as mediapipe from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0';
+            // Expose MediaPipe to the global scope
+            window.mediapipe = mediapipe;
+        </script>
+        <script src="script.js"></script>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Pic the Vibe</h1>
+            <p>Upload an image & select your music preferences.</p>
 
-    <div class="upload-container">
-        <label for="imageUpload">📷 Click to Upload an Image</label>
-        <input type="file" id="imageUpload" accept="image/*">
-    </div>
+            <div class="upload-container">
+                <label for="imageUpload">📷 Click to Upload an Image</label>
+                <input type="file" id="imageUpload" accept="image/*">
+            </div>
 
-    <div class="results-container"></div>
-    <button id="findMoreSongs" style="display: none;" onclick="findMoreSongs()">Beta Version</button>
-    <p class="hidden-message">Are you listening to Paro on loop?</p>
-<p class="hidden-message">Chia seeds, earthy smell, miss them</p>
-    <script src="script.js"></script>
-</body>
+            <div id="detectedVibe" style="display: none; margin: 20px 0;">
+                <p>Detected Vibe: <span id="vibeText"></span></p>
+            </div>
+
+            <div class="button-wrapper">
+                <button id="showResults" style="display: none;">🎵 Show Results</button>
+            </div>
+
+            <div id="spinner" class="spinner" style="display: none;"></div>
+
+            <div class="results-container" style="display: none;"></div>
+
+            <div class="filter-container">
+                <label for="language">Language:</label>
+                <select id="language">
+                    <option value="any">Any</option>
+                    <option value="english">English</option>
+                    <option value="hindi">Hindi</option>
+                    <option value="marathi">Marathi</option>
+                </select>
+
+                <label for="genre">Genre:</label>
+                <select id="genre">
+                    <option value="any">Any</option>
+                    <option value="pop">Pop</option>
+                    <option value="rock">Rock</option>
+                    <option value="lofi">Lo-fi</option>
+                </select>
+
+                <label for="vibe">Select the Vibe:</label>
+                <select id="vibe">
+                    <option value="">Auto-detect from image</option>
+                    <option value="happy">Happy</option>
+                    <option value="calm">Calm</option>
+                    <option value="energetic">Energetic</option>
+                    <option value="sad">Sad</option>
+                </select>
+            </div>
+
+            <div class="button-container">
+                <button id="clearFilters">Clear Filters</button>
+                <button id="findMoreSongs" style="display: none;">🔄 Find More Songs</button>
+            </div>
+        </div>
+    </body>
 </html>
