@@ -8,6 +8,7 @@ let lastFetchedSongs = [];
 let previouslyFetchedSongIds = new Set();
 let currentVibe = null;
 let searchOffset = 0;
+let currentPlayer = null;
 
 async function loadModels() {
     console.log("🚀 Loading models...");
@@ -38,7 +39,7 @@ async function loadModels() {
         );
         faceDetector = await FaceDetector.createFromOptions(filesetResolver, {
             baseOptions: {
-                modelAssetPath: "./models/blaze_face_short_range.tflite",
+                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite",
             },
             runningMode: "IMAGE"
         });
@@ -153,8 +154,8 @@ async function analyzeFaceExpression(imageElement) {
     document.getElementById("showResults").style.display = "block";
 
     if (!faceDetector) {
-        console.log("⚠️ Face detector not initialized! Using default emotion.");
-        return "happy";
+        console.log("⚠️ Face detector not initialized! Skipping face detection.");
+        return null;
     }
 
     try {
@@ -163,25 +164,22 @@ async function analyzeFaceExpression(imageElement) {
         console.log("Raw detection result:", detections);
 
         if (!detections.detections || detections.detections.length === 0) {
-            console.log("⚠️ No faces detected in the image. Using default emotion.");
-            return "happy";
+            console.log("⚠️ No faces detected in the image. Skipping face detection.");
+            return null;
         }
 
         console.log("✅ Faces detected:", detections.detections.length);
 
         if (!faceApiModelsLoaded) {
-            console.log("⚠️ face-api.js models not loaded! Using default emotion.");
-            return "happy";
+            console.log("⚠️ face-api.js models not loaded! Skipping face detection.");
+            return null;
         }
 
         const faceApiDetections = await faceapi.detectAllFaces(imageElement, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
         if (!faceApiDetections || faceApiDetections.length === 0) {
-            console.log("⚠️ face-api.js detected no faces! Using default emotion.");
-            return "happy";
+            console.log("⚠️ face-api.js detected no faces! Skipping face detection.");
+            return null;
         }
-
-        const expressions = faceApiDetections[0].expressions;
-        console.log("Detected expressions:", expressions);
 
         const emotionMap = {
             happy: "happy",
@@ -193,9 +191,32 @@ async function analyzeFaceExpression(imageElement) {
             fearful: "sad"
         };
 
+        const expressionScores = {
+            happy: 0,
+            sad: 0,
+            neutral: 0,
+            angry: 0,
+            surprised: 0,
+            disgusted: 0,
+            fearful: 0
+        };
+
+        faceApiDetections.forEach((detection, index) => {
+            const expressions = detection.expressions;
+            console.log(`Detected expressions for face ${index + 1}:`, expressions);
+            for (const [expression, value] of Object.entries(expressions)) {
+                expressionScores[expression] += value;
+            }
+        });
+
+        const numFaces = faceApiDetections.length;
+        for (const expression in expressionScores) {
+            expressionScores[expression] /= numFaces;
+        }
+
         let maxExpression = "neutral";
         let maxValue = 0;
-        for (const [expression, value] of Object.entries(expressions)) {
+        for (const [expression, value] of Object.entries(expressionScores)) {
             if (value > maxValue) {
                 maxValue = value;
                 maxExpression = expression;
@@ -203,11 +224,11 @@ async function analyzeFaceExpression(imageElement) {
         }
 
         const detectedEmotion = emotionMap[maxExpression] || "happy";
-        console.log("Detected emotion:", detectedEmotion);
+        console.log("Aggregated emotion from all faces:", detectedEmotion);
         return detectedEmotion;
     } catch (error) {
         console.error("Error during face detection:", error);
-        return "happy";
+        return null;
     }
 }
 
@@ -237,19 +258,51 @@ async function analyzeObjectsInImage(imageElement) {
             flower: "happy",
             tree: "calm",
             gift: "happy",
-            balloon: "happy"
+            balloon: "happy",
+            person: "happy",
+            bird: "calm",
+            boat: "energetic",
+            mountain: "calm",
+            sunset: "calm",
+            city: "energetic",
+            laptop: "calm",
+            phone: "energetic",
+            chair: "calm",
+            table: "calm"
         };
 
-        for (const prediction of predictions) {
+        const vibeScores = {
+            happy: 0,
+            calm: 0,
+            energetic: 0,
+            sad: 0
+        };
+
+        predictions.forEach(prediction => {
             const object = prediction.class.toLowerCase();
-            if (objectVibeMap[object]) {
-                console.log(`Detected object: ${object}, mapped to vibe: ${objectVibeMap[object]}`);
-                return objectVibeMap[object];
+            const vibe = objectVibeMap[object];
+            if (vibe) {
+                console.log(`Detected object: ${object}, mapped to vibe: ${vibe}`);
+                vibeScores[vibe] += prediction.score;
+            }
+        });
+
+        let maxVibe = null;
+        let maxScore = 0;
+        for (const [vibe, score] of Object.entries(vibeScores)) {
+            if (score > maxScore) {
+                maxScore = score;
+                maxVibe = vibe;
             }
         }
 
-        console.log("⚠️ No recognized objects mapped to a vibe.");
-        return null;
+        if (!maxVibe) {
+            console.log("⚠️ No recognized objects mapped to a vibe.");
+            return null;
+        }
+
+        console.log("Aggregated vibe from objects:", maxVibe);
+        return maxVibe;
     } catch (error) {
         console.error("Error during object detection:", error);
         return null;
@@ -259,8 +312,8 @@ async function analyzeObjectsInImage(imageElement) {
 function analyzeImageColors(imageElement) {
     console.log("🔍 Analyzing image colors...");
     const colorThief = new ColorThief();
-    const dominantColor = colorThief.getColor(imageElement);
-    console.log("Dominant color (RGB):", dominantColor);
+    const palette = colorThief.getPalette(imageElement, 5);
+    console.log("Color palette (RGB):", palette);
 
     const rgbToHsl = (r, g, b) => {
         r /= 255, g /= 255, b /= 255;
@@ -283,15 +336,175 @@ function analyzeImageColors(imageElement) {
         return [h * 360, s * 100, l * 100];
     };
 
-    const [h, s, l] = rgbToHsl(dominantColor[0], dominantColor[1], dominantColor[2]);
-    console.log("Dominant color (HSL):", h, s, l);
+    let totalH = 0, totalS = 0, totalL = 0;
+    palette.forEach(color => {
+        const [h, s, l] = rgbToHsl(color[0], color[1], color[2]);
+        totalH += h;
+        totalS += s;
+        totalL += l;
+    });
 
-    if (l < 20) return "sad";
-    if (s < 20) return "calm";
-    if (h >= 0 && h < 60) return "energetic";
-    if (h >= 60 && h < 180) return "happy";
-    if (h >= 180 && h < 300) return "calm";
+    const avgH = totalH / palette.length;
+    const avgS = totalS / palette.length;
+    const avgL = totalL / palette.length;
+    console.log("Average color (HSL):", avgH, avgS, avgL);
+
+    if (avgL < 30) return "sad";
+    if (avgS < 30) return "calm";
+    if (avgH >= 0 && avgH < 60) return "energetic";
+    if (avgH >= 60 && avgH < 180) return "happy";
+    if (avgH >= 180 && avgH < 300) return "calm";
     return "energetic";
+}
+
+async function validateSongLanguage(song, language, token) {
+    try {
+        const artistId = song.artists[0].id;
+        const artistResponse = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const artistData = await artistResponse.json();
+        console.log(`Artist data for ${song.name}:`, artistData);
+
+        const languageKeywords = {
+            hindi: ["bollywood", "hindi", "indian", "desi"],
+            marathi: ["marathi", "maharashtra", "marathi pop", "marathi film", "marathi folk"], // Expanded keywords
+            english: ["pop", "rock", "hip hop", "english"]
+        };
+
+        // Known Marathi artists (you can expand this list based on research)
+        const knownMarathiArtists = [
+            "ajay-atul", // Ajay-Atul (famous Marathi composers)
+            "shankar-mahadevan", // Shankar Mahadevan (contributes to Marathi music)
+            "swapnil-bandodkar", // Popular Marathi singer
+            "bela-shende", // Popular Marathi singer
+            "avdhoot-gupte" // Marathi artist
+        ];
+
+        const songName = song.name.toLowerCase();
+        const albumName = song.album.name.toLowerCase();
+        const artistName = song.artists[0].name.toLowerCase();
+        const artistGenres = artistData.genres.map(genre => genre.toLowerCase());
+        const artistIdLower = artistId.toLowerCase();
+
+        const keywords = languageKeywords[language] || [];
+        let matchesLanguage = keywords.some(keyword =>
+            songName.includes(keyword) ||
+            albumName.includes(keyword) ||
+            artistName.includes(keyword) ||
+            artistGenres.includes(keyword)
+        );
+
+        // Additional check for known Marathi artists
+        if (language === "marathi" && !matchesLanguage) {
+            matchesLanguage = knownMarathiArtists.some(artist => artistIdLower === artist || artistName.includes(artist));
+        }
+
+        const markets = song.available_markets || [];
+        // Relaxed market check: if no markets are specified, assume it's available in India
+        const marketMatches = language === "hindi" || language === "marathi" ? (markets.length === 0 || markets.includes("IN")) : true;
+
+        return matchesLanguage && marketMatches;
+    } catch (error) {
+        console.error(`Error validating language for song ${song.name}:`, error);
+        return false;
+    }
+}
+
+async function validateSongVibe(song, vibe, token) {
+    try {
+        const audioFeaturesResponse = await fetch(`https://api.spotify.com/v1/audio-features/${song.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const audioFeatures = await audioFeaturesResponse.json();
+        console.log(`Audio features for ${song.name}:`, audioFeatures);
+
+        const vibeAudioFeatures = {
+            happy: { minValence: 0.6, minEnergy: 0.5 },
+            calm: { maxEnergy: 0.4, minAcousticness: 0.5 },
+            energetic: { minEnergy: 0.7, minDanceability: 0.6 },
+            sad: { maxValence: 0.4, maxEnergy: 0.5 }
+        };
+
+        const criteria = vibeAudioFeatures[vibe] || vibeAudioFeatures.happy;
+        let matchesVibe = true;
+
+        if (criteria.minValence && audioFeatures.valence < criteria.minValence) matchesVibe = false;
+        if (criteria.maxValence && audioFeatures.valence > criteria.maxValence) matchesVibe = false;
+        if (criteria.minEnergy && audioFeatures.energy < criteria.minEnergy) matchesVibe = false;
+        if (criteria.maxEnergy && audioFeatures.energy > criteria.maxEnergy) matchesVibe = false;
+        if (criteria.minDanceability && audioFeatures.danceability < criteria.minDanceability) matchesVibe = false;
+        if (criteria.minAcousticness && audioFeatures.acousticness < criteria.minAcousticness) matchesVibe = false;
+
+        return matchesVibe;
+    } catch (error) {
+        console.error(`Error validating vibe for song ${song.name}:`, error);
+        return false;
+    }
+}
+
+async function getRecommendations(seedTracks, vibe, language, genre, token) {
+    try {
+        const vibeAudioFeatures = {
+            happy: { target_valence: 0.8, target_energy: 0.7 },
+            calm: { target_energy: 0.3, target_acousticness: 0.7 },
+            energetic: { target_energy: 0.8, target_danceability: 0.7 },
+            sad: { target_valence: 0.3, target_energy: 0.4 }
+        };
+
+        const params = new URLSearchParams({
+            seed_tracks: seedTracks.join(","),
+            limit: 10, // Fetch more to filter down to 3
+            min_popularity: 30, // Avoid obscure tracks
+            max_popularity: 80, // Mix trending and hidden gems
+            ...vibeAudioFeatures[vibe] || vibeAudioFeatures.happy
+        });
+
+        if (genre !== "any") params.append("seed_genres", genre);
+
+        const url = `https://api.spotify.com/v1/recommendations?${params.toString()}`;
+        console.log("Recommendations API URL:", url);
+
+        const response = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        console.log("Recommendations API response status:", response.status);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Recommendations API error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log("Recommendations API response:", data);
+
+        if (!data.tracks || data.tracks.length === 0) {
+            console.log("No recommendations found.");
+            return [];
+        }
+
+        // Validate language and vibe, and ensure artist variety
+        const uniqueArtists = new Set();
+        const filteredTracks = [];
+        for (const track of data.tracks) {
+            if (uniqueArtists.has(track.artists[0].id)) continue; // Skip if artist already included
+
+            const matchesLanguage = language === "any" || (await validateSongLanguage(track, language, token));
+            const matchesVibe = await validateSongVibe(track, vibe, token);
+
+            if (matchesLanguage && matchesVibe) {
+                uniqueArtists.add(track.artists[0].id);
+                filteredTracks.push(track);
+            }
+
+            if (filteredTracks.length >= 3) break; // We only need 3 songs
+        }
+
+        return filteredTracks;
+    } catch (error) {
+        console.error("Error fetching recommendations:", error);
+        return [];
+    }
 }
 
 async function searchSongsByEmotion(detectedMood, useOffset = false) {
@@ -333,12 +546,12 @@ async function searchSongsByEmotion(detectedMood, useOffset = false) {
 
     const languageMap = {
         english: "",
-        hindi: "bollywood",
-        marathi: "marathi",
+        hindi: "bollywood hindi",
+        marathi: "marathi OR maharashtra OR marathi pop", // Improved query for Marathi
         any: ""
     };
     const languageKeyword = languageMap[language] || "";
-    if (languageKeyword) query += ` ${languageKeyword}`;
+    if (languageKeyword) query = `${languageKeyword} ${query}`;
 
     if (genre !== "any") query += ` genre:${genre}`;
 
@@ -346,36 +559,137 @@ async function searchSongsByEmotion(detectedMood, useOffset = false) {
     const randomModifier = randomModifiers[Math.floor(Math.random() * randomModifiers.length)];
     query += ` ${randomModifier}`;
 
-    console.log("Final query after language, genre, and modifier:", query);
+    console.log("Final query for seed tracks:", query);
 
     const randomOffset = useOffset ? Math.floor(Math.random() * 50) : 0;
     console.log("Random offset for this search:", randomOffset);
 
-    let songs = await fetchSongs(query, token, randomOffset);
+    // Step 1: Fetch seed tracks
+    let seedTracks = await fetchSongs(query, token, randomOffset);
 
-    if (!songs || songs.length === 0) {
-        console.log("No songs found with full query, falling back to base vibe...");
-        query = selectedKeywords.join(" ");
-        songs = await fetchSongs(query, token, randomOffset);
+    if (!seedTracks || seedTracks.length === 0) {
+        console.log("No seed tracks found with full query, falling back to language-only search...");
+        query = languageKeyword || "pop";
+        seedTracks = await fetchSongs(query, token, randomOffset);
     }
 
-    if (!songs || songs.length === 0) {
-        console.log("No songs found with base vibe, using generic query...");
+    if (!seedTracks || seedTracks.length === 0) {
+        console.log("No seed tracks found with language, using generic query...");
         query = "pop";
-        songs = await fetchSongs(query, token, randomOffset);
+        seedTracks = await fetchSongs(query, token, randomOffset);
     }
 
+    // Filter seed tracks by language
+    if (language !== "any" && seedTracks.length > 0) {
+        seedTracks = await Promise.all(
+            seedTracks.map(async (song) => {
+                const matchesLanguage = await validateSongLanguage(song, language, token);
+                return matchesLanguage ? song : null;
+            })
+        );
+        seedTracks = seedTracks.filter(song => song !== null);
+    }
+
+    // Step 2: Use seed tracks to get recommendations
+    let songs = [];
+    if (seedTracks.length > 0) {
+        const seedTrackIds = seedTracks.slice(0, 5).map(track => track.id);
+        songs = await getRecommendations(seedTrackIds, baseVibe, language, genre, token);
+    }
+
+    // Step 3: Fallback to Marathi-specific playlist if no recommendations
+    if (language === "marathi" && (!songs || songs.length === 0)) {
+        console.log("No recommendations found for Marathi, falling back to Marathi playlist...");
+        const marathiPlaylistId = "37i9dQZF1DX1nTw1G7Q3Uw"; // "Hot Hits Marathi" playlist ID
+        songs = await fetchPlaylistTracks(marathiPlaylistId, token);
+
+        if (songs.length > 0) {
+            songs = await Promise.all(
+                songs.map(async (song) => {
+                    const matchesVibe = await validateSongVibe(song, baseVibe, token);
+                    return matchesVibe ? song : null;
+                })
+            );
+            songs = songs.filter(song => song !== null);
+
+            // Ensure artist variety
+            const uniqueArtists = new Set();
+            songs = songs.filter(song => {
+                if (uniqueArtists.has(song.artists[0].id)) return false;
+                uniqueArtists.add(song.artists[0].id);
+                return true;
+            }).slice(0, 3);
+        }
+    }
+
+    // Step 4: Fallback to original search if still no songs
+    if (!songs || songs.length === 0) {
+        console.log("No songs found in playlist, falling back to original search...");
+        songs = await fetchSongs(query, token, randomOffset);
+
+        if (language !== "any" && songs.length > 0) {
+            songs = await Promise.all(
+                songs.map(async (song) => {
+                    const matchesLanguage = await validateSongLanguage(song, language, token);
+                    const matchesVibe = await validateSongVibe(song, baseVibe, token);
+                    return matchesLanguage && matchesVibe ? song : null;
+                })
+            );
+            songs = songs.filter(song => song !== null);
+        }
+
+        const uniqueArtists = new Set();
+        songs = songs.filter(song => {
+            if (uniqueArtists.has(song.artists[0].id)) return false;
+            uniqueArtists.add(song.artists[0].id);
+            return true;
+        }).slice(0, 3);
+    }
+
+    // Filter out previously fetched songs
     songs = songs.filter(song => !previouslyFetchedSongIds.has(song.id));
     songs.forEach(song => previouslyFetchedSongIds.add(song.id));
 
-    displaySongs(songs);
+    displaySongs(songs, baseVibe);
 
     searchOffset = 0;
 }
 
+async function fetchPlaylistTracks(playlistId, token) {
+    try {
+        const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`;
+        console.log("Fetching playlist tracks from URL:", url);
+
+        const response = await fetch(url, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        console.log("Playlist API response status:", response.status);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Playlist API error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log("Playlist API response:", data);
+
+        if (!data.items || data.items.length === 0) {
+            console.log("No tracks found in playlist.");
+            return [];
+        }
+
+        const tracks = data.items.map(item => item.track).filter(track => track && track.id);
+        console.log("Fetched playlist tracks:", tracks);
+        return tracks;
+    } catch (error) {
+        console.error("Error fetching playlist tracks:", error);
+        return [];
+    }
+}
+
 async function fetchSongs(query, token, offset) {
     try {
-        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=3${offset ? `&offset=${offset}` : ""}`;
+        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=5${offset ? `&offset=${offset}` : ""}`;
         console.log("Spotify API URL:", url);
 
         const response = await fetch(url, {
@@ -404,9 +718,13 @@ async function fetchSongs(query, token, offset) {
     }
 }
 
-function displaySongs(songs) {
+function displaySongs(songs, vibe) {
     console.log("🎵 Displaying songs:", songs);
     const resultsContainer = document.querySelector(".results-container");
+    if (!resultsContainer) {
+        console.error("❌ Element with class 'results-container' not found in the DOM!");
+        return;
+    }
     resultsContainer.innerHTML = "";
 
     if (!songs || songs.length === 0) {
@@ -418,17 +736,54 @@ function displaySongs(songs) {
 
     lastFetchedSongs = songs;
 
-    songs.forEach(song => {
-        const songCard = document.createElement("div");
-        songCard.classList.add("song-card");
-        songCard.innerHTML = `
-            <img src="${song.album.images[0]?.url || 'placeholder.jpg'}" alt="${song.name}">
-            <h3>${song.name}</h3>
-            <p>By ${song.artists[0].name}</p>
-            <iframe src="https://open.spotify.com/embed/track/${song.id}" width="100%" height="80" frameborder="0" allowtransparency="true" allow="encrypted-media"></iframe>
-        `;
-        resultsContainer.appendChild(songCard);
-    });
+    window.onSpotifyIframeApiReady = (IframeAPI) => {
+        songs.forEach((song, index) => {
+            const songCard = document.createElement("div");
+            songCard.classList.add("song-card");
+
+            const iframeContainer = document.createElement("div");
+            iframeContainer.id = `embed-iframe-${index}`;
+
+            // Generate "Why This Song?" description
+            let whyThisSong = "";
+            if (song.popularity > 70) {
+                whyThisSong = "Trending Track";
+            } else if (song.popularity < 40) {
+                whyThisSong = "Hidden Gem";
+            } else {
+                whyThisSong = `Matches Your ${vibe.charAt(0).toUpperCase() + vibe.slice(1)} Vibe`;
+            }
+
+            songCard.innerHTML = `
+                <img src="${song.album.images[0]?.url || 'placeholder.jpg'}" alt="${song.name}">
+                <h3>${song.name}</h3>
+                <p>By ${song.artists[0].name}</p>
+                <p class="why-this-song">${whyThisSong}</p>
+            `;
+            songCard.appendChild(iframeContainer);
+            resultsContainer.appendChild(songCard);
+
+            const element = document.getElementById(`embed-iframe-${index}`);
+            const options = {
+                uri: `spotify:track:${song.id}`,
+                width: "100%",
+                height: 80
+            };
+
+            IframeAPI.createController(element, options, (controller) => {
+                controller.addListener('playback_update', (event) => {
+                    if (event.data.isPaused === false) {
+                        console.log(`🎶 Song ${song.name} started playing`);
+                        if (currentPlayer && currentPlayer !== controller) {
+                            currentPlayer.pause();
+                            console.log("⏸️ Paused the previous song");
+                        }
+                        currentPlayer = controller;
+                    }
+                });
+            });
+        });
+    };
 
     document.getElementById("findMoreSongs").style.display = "inline-block";
     document.querySelector(".results-container").style.display = "flex";
@@ -487,11 +842,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const colorVibe = analyzeImageColors(imgElement);
             console.log("🎨 Color vibe:", colorVibe);
 
-            const vibes = [emotion, objectVibe, colorVibe].filter(vibe => vibe !== null);
-            currentVibe = vibes.length > 0 ? vibes.join(" ") : "happy";
-            console.log("🔎 Analyzed vibe (stored for later):", currentVibe);
+            const vibeScores = {
+                happy: 0,
+                calm: 0,
+                energetic: 0,
+                sad: 0
+            };
 
-            // Display the detected vibe
+            if (emotion) vibeScores[emotion] += 0.5;
+            if (objectVibe) vibeScores[objectVibe] += 0.3;
+            if (colorVibe) vibeScores[colorVibe] += 0.2;
+
+            let maxVibe = "happy";
+            let maxScore = 0;
+            for (const [vibe, score] of Object.entries(vibeScores)) {
+                if (score > maxScore) {
+                    maxScore = score;
+                    maxVibe = vibe;
+                }
+            }
+
+            currentVibe = maxVibe;
+            console.log("🔎 Final analyzed vibe:", currentVibe);
+
             document.getElementById("vibeText").textContent = currentVibe;
             document.getElementById("detectedVibe").style.display = "block";
 
@@ -550,11 +923,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const objectVibe = await analyzeObjectsInImage(imgElement);
             const colorVibe = analyzeImageColors(imgElement);
 
-            const vibes = [emotion, objectVibe, colorVibe].filter(vibe => vibe !== null);
-            currentVibe = vibes.length > 0 ? vibes.join(" ") : "happy";
+            const vibeScores = {
+                happy: 0,
+                calm: 0,
+                energetic: 0,
+                sad: 0
+            };
+
+            if (emotion) vibeScores[emotion] += 0.5;
+            if (objectVibe) vibeScores[objectVibe] += 0.3;
+            if (colorVibe) vibeScores[colorVibe] += 0.2;
+
+            let maxVibe = "happy";
+            let maxScore = 0;
+            for (const [vibe, score] of Object.entries(vibeScores)) {
+                if (score > maxScore) {
+                    maxScore = score;
+                    maxVibe = vibe;
+                }
+            }
+
+            currentVibe = maxVibe;
             console.log("🔎 Re-analyzed vibe for new songs:", currentVibe);
 
-            // Update the detected vibe display
             document.getElementById("vibeText").textContent = currentVibe;
             document.getElementById("detectedVibe").style.display = "block";
 
